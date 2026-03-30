@@ -20,7 +20,7 @@ async def _test_compression(ctx: TestContext):
     info(f"Creating subvolume '{sv_name}' with compression=zstd...")
     try:
         sv = await ctx.client.call("subvolume.create", {
-            "pool": ctx.pool,
+            "filesystem": ctx.pool,
             "name": sv_name,
             "subvolume_type": "filesystem",
             "compression": "zstd",
@@ -31,7 +31,7 @@ async def _test_compression(ctx: TestContext):
         return
 
     try:
-        got = await ctx.client.call("subvolume.get", {"pool": ctx.pool, "name": sv_name})
+        got = await ctx.client.call("subvolume.get", {"filesystem": ctx.pool, "name": sv_name})
         comp = got.get("compression")
         ctx.record("compression: field returned correctly", comp == "zstd",
                    "" if comp == "zstd" else f"expected 'zstd', got {comp!r}")
@@ -40,7 +40,7 @@ async def _test_compression(ctx: TestContext):
 
     if not ctx.skip_delete:
         try:
-            await ctx.client.call("subvolume.delete", {"pool": ctx.pool, "name": sv_name})
+            await ctx.client.call("subvolume.delete", {"filesystem": ctx.pool, "name": sv_name})
         except Exception:
             pass
 
@@ -68,7 +68,7 @@ async def _test_snapshot_integrity(ctx: TestContext):
         info(f"Creating subvolume '{sv_name}'...")
         try:
             sv = await ctx.client.call("subvolume.create", {
-                "pool": ctx.pool,
+                "filesystem": ctx.pool,
                 "name": sv_name,
                 "subvolume_type": "filesystem",
             })
@@ -104,7 +104,7 @@ async def _test_snapshot_integrity(ctx: TestContext):
         info(f"Taking snapshot '{snap_name}'...")
         try:
             await ctx.client.call("snapshot.create", {
-                "pool": ctx.pool,
+                "filesystem": ctx.pool,
                 "subvolume": sv_name,
                 "name": snap_name,
                 "read_only": True,
@@ -130,7 +130,7 @@ async def _test_snapshot_integrity(ctx: TestContext):
         info(f"Cloning snapshot → '{clone_name}'...")
         try:
             clone_sv = await ctx.client.call("snapshot.clone", {
-                "pool": ctx.pool,
+                "filesystem": ctx.pool,
                 "subvolume": sv_name,
                 "snapshot": snap_name,
                 "new_name": clone_name,
@@ -180,7 +180,7 @@ async def _test_snapshot_integrity(ctx: TestContext):
                 except Exception:
                     pass
             try:
-                await ctx.client.call("subvolume.delete", {"pool": ctx.pool, "name": clone_name})
+                await ctx.client.call("subvolume.delete", {"filesystem": ctx.pool, "name": clone_name})
             except Exception:
                 pass
             if share_id:
@@ -190,11 +190,11 @@ async def _test_snapshot_integrity(ctx: TestContext):
                     pass
             try:
                 await ctx.client.call("snapshot.delete", {
-                    "pool": ctx.pool, "subvolume": sv_name, "name": snap_name,
+                    "filesystem": ctx.pool, "subvolume": sv_name, "name": snap_name,
                 })
             except Exception:
                 pass
             try:
-                await ctx.client.call("subvolume.delete", {"pool": ctx.pool, "name": sv_name})
+                await ctx.client.call("subvolume.delete", {"filesystem": ctx.pool, "name": sv_name})
             except Exception:
                 pass

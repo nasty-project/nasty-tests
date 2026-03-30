@@ -14,7 +14,7 @@ async def test_subvolume(ctx: TestContext):
     info(f"Creating filesystem subvolume '{sv_name}'...")
     try:
         sv = await ctx.client.call("subvolume.create", {
-            "pool": ctx.pool,
+            "filesystem": ctx.pool,
             "name": sv_name,
             "subvolume_type": "filesystem",
             "comments": "lifecycle test",
@@ -25,14 +25,14 @@ async def test_subvolume(ctx: TestContext):
         return
 
     info("Verifying subvolume appears in list...")
-    svs = await ctx.client.call("subvolume.list", {"pool": ctx.pool})
+    svs = await ctx.client.call("subvolume.list", {"filesystem": ctx.pool})
     found = any(s["name"] == sv_name for s in svs)
     ctx.record("subvolume lifecycle: appears in list", found,
                "" if found else f"'{sv_name}' not in list")
 
     info(f"Getting subvolume '{sv_name}'...")
     try:
-        got = await ctx.client.call("subvolume.get", {"pool": ctx.pool, "name": sv_name})
+        got = await ctx.client.call("subvolume.get", {"filesystem": ctx.pool, "name": sv_name})
         ctx.record("subvolume lifecycle: get", got["name"] == sv_name,
                    "" if got["name"] == sv_name else f"name mismatch: {got['name']}")
     except Exception as e:
@@ -41,14 +41,14 @@ async def test_subvolume(ctx: TestContext):
     if not ctx.skip_delete:
         info(f"Deleting subvolume '{sv_name}'...")
         try:
-            await ctx.client.call("subvolume.delete", {"pool": ctx.pool, "name": sv_name})
+            await ctx.client.call("subvolume.delete", {"filesystem": ctx.pool, "name": sv_name})
             ctx.record("subvolume lifecycle: delete", True)
         except Exception as e:
             ctx.record("subvolume lifecycle: delete", False, str(e))
             return
 
         info("Verifying subvolume is gone from list...")
-        svs = await ctx.client.call("subvolume.list", {"pool": ctx.pool})
+        svs = await ctx.client.call("subvolume.list", {"filesystem": ctx.pool})
         gone = not any(s["name"] == sv_name for s in svs)
         ctx.record("subvolume lifecycle: absent after delete", gone,
                    "" if gone else f"'{sv_name}' still in list after delete")
@@ -59,7 +59,7 @@ async def test_subvolume(ctx: TestContext):
     info(f"Creating subvolume '{prop_sv}' for property tests...")
     try:
         await ctx.client.call("subvolume.create", {
-            "pool": ctx.pool,
+            "filesystem": ctx.pool,
             "name": prop_sv,
             "subvolume_type": "filesystem",
         })
@@ -72,7 +72,7 @@ async def test_subvolume(ctx: TestContext):
     info("Setting properties...")
     try:
         updated = await ctx.client.call("subvolume.set_properties", {
-            "pool": ctx.pool,
+            "filesystem": ctx.pool,
             "name": prop_sv,
             "properties": props,
         })
@@ -86,7 +86,7 @@ async def test_subvolume(ctx: TestContext):
     info("Finding subvolume by property...")
     try:
         results = await ctx.client.call("subvolume.find_by_property", {
-            "pool": ctx.pool,
+            "filesystem": ctx.pool,
             "key": "nasty-csi/pvc",
             "value": f"pvc-{tag}",
         })
@@ -99,7 +99,7 @@ async def test_subvolume(ctx: TestContext):
     info("Removing one property key...")
     try:
         updated = await ctx.client.call("subvolume.remove_properties", {
-            "pool": ctx.pool,
+            "filesystem": ctx.pool,
             "name": prop_sv,
             "keys": ["nasty-csi/pvc"],
         })
@@ -112,7 +112,7 @@ async def test_subvolume(ctx: TestContext):
 
     if not ctx.skip_delete:
         try:
-            await ctx.client.call("subvolume.delete", {"pool": ctx.pool, "name": prop_sv})
+            await ctx.client.call("subvolume.delete", {"filesystem": ctx.pool, "name": prop_sv})
         except Exception:
             pass
 
@@ -122,7 +122,7 @@ async def test_subvolume(ctx: TestContext):
     info(f"Creating block subvolume '{block_sv}' (32 MiB)...")
     try:
         sv = await ctx.client.call("subvolume.create", {
-            "pool": ctx.pool,
+            "filesystem": ctx.pool,
             "name": block_sv,
             "subvolume_type": "block",
             "volsize_bytes": 32 * 1024 * 1024,
@@ -137,7 +137,7 @@ async def test_subvolume(ctx: TestContext):
     info("Detaching loop device...")
     try:
         detached = await ctx.client.call("subvolume.detach", {
-            "pool": ctx.pool,
+            "filesystem": ctx.pool,
             "name": block_sv,
         })
         no_dev = detached.get("block_device") is None
@@ -149,7 +149,7 @@ async def test_subvolume(ctx: TestContext):
     info("Re-attaching loop device...")
     try:
         attached = await ctx.client.call("subvolume.attach", {
-            "pool": ctx.pool,
+            "filesystem": ctx.pool,
             "name": block_sv,
         })
         has_dev = bool(attached.get("block_device"))
@@ -166,7 +166,7 @@ async def test_subvolume(ctx: TestContext):
     info(f"Creating block subvolume '{resize_sv}' ({initial_size // (1024*1024)} MiB) for resize test...")
     try:
         sv = await ctx.client.call("subvolume.create", {
-            "pool": ctx.pool,
+            "filesystem": ctx.pool,
             "name": resize_sv,
             "subvolume_type": "block",
             "volsize_bytes": initial_size,
@@ -184,7 +184,7 @@ async def test_subvolume(ctx: TestContext):
         info(f"Resizing '{resize_sv}' to {new_size // (1024*1024)} MiB...")
         try:
             resized = await ctx.client.call("subvolume.resize", {
-                "pool": ctx.pool,
+                "filesystem": ctx.pool,
                 "name": resize_sv,
                 "volsize_bytes": new_size,
             })
@@ -197,20 +197,20 @@ async def test_subvolume(ctx: TestContext):
 
     if not ctx.skip_delete:
         try:
-            await ctx.client.call("subvolume.detach", {"pool": ctx.pool, "name": resize_sv})
+            await ctx.client.call("subvolume.detach", {"filesystem": ctx.pool, "name": resize_sv})
         except Exception:
             pass
         try:
-            await ctx.client.call("subvolume.delete", {"pool": ctx.pool, "name": resize_sv})
+            await ctx.client.call("subvolume.delete", {"filesystem": ctx.pool, "name": resize_sv})
         except Exception:
             pass
 
     if not ctx.skip_delete:
         try:
-            await ctx.client.call("subvolume.detach", {"pool": ctx.pool, "name": block_sv})
+            await ctx.client.call("subvolume.detach", {"filesystem": ctx.pool, "name": block_sv})
         except Exception:
             pass
         try:
-            await ctx.client.call("subvolume.delete", {"pool": ctx.pool, "name": block_sv})
+            await ctx.client.call("subvolume.delete", {"filesystem": ctx.pool, "name": block_sv})
         except Exception:
             pass

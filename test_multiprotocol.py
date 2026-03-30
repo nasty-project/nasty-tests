@@ -24,7 +24,7 @@ async def test_multiprotocol(ctx: TestContext):
         # ── Create one subvolume ──────────────────────────────────
         info(f"Creating filesystem subvolume '{sv_name}'...")
         sv = await ctx.client.call("subvolume.create", {
-            "pool": ctx.pool,
+            "filesystem": ctx.pool,
             "name": sv_name,
             "subvolume_type": "filesystem",
         })
@@ -128,6 +128,6 @@ async def test_multiprotocol(ctx: TestContext):
                     pass
             if sv:
                 try:
-                    await ctx.client.call("subvolume.delete", {"pool": ctx.pool, "name": sv_name})
+                    await ctx.client.call("subvolume.delete", {"filesystem": ctx.pool, "name": sv_name})
                 except Exception:
                     pass

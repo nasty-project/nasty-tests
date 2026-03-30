@@ -77,7 +77,7 @@ async def test_nvmeof(ctx: TestContext):
                 label = f"NVMe-oF[{i+1}]"
                 info(f"Creating block subvolume '{sv_names[i]}' (64 MiB)...")
                 sv = await ctx.client.call("subvolume.create", {
-                    "pool": ctx.pool,
+                    "filesystem": ctx.pool,
                     "name": sv_names[i],
                     "subvolume_type": "block",
                     "volsize_bytes": 64 * 1024 * 1024,
@@ -176,7 +176,7 @@ async def test_nvmeof(ctx: TestContext):
                 info(f"Creating snapshot '{snap_names[i][j]}' of '{sv_names[i]}'...")
                 try:
                     await ctx.client.call("snapshot.create", {
-                        "pool": ctx.pool,
+                        "filesystem": ctx.pool,
                         "subvolume": sv_names[i],
                         "name": snap_names[i][j],
                         "read_only": True,
@@ -185,7 +185,7 @@ async def test_nvmeof(ctx: TestContext):
                 except Exception as e:
                     ctx.record(f"{label}: snapshot {j+1} created", False, str(e))
 
-        snapshots = await ctx.client.call("snapshot.list", {"pool": ctx.pool})
+        snapshots = await ctx.client.call("snapshot.list", {"filesystem": ctx.pool})
         for i in range(N):
             for j in range(S):
                 found = any(s["name"] == snap_names[i][j] and s["subvolume"] == sv_names[i]
@@ -201,7 +201,7 @@ async def test_nvmeof(ctx: TestContext):
             info(f"Cloning '{snap_names[i][1]}' → '{snap2_sv_names[i]}' for snapshot verify...")
             try:
                 sv = await ctx.client.call("snapshot.clone", {
-                    "pool": ctx.pool,
+                    "filesystem": ctx.pool,
                     "subvolume": sv_names[i],
                     "snapshot": snap_names[i][1],
                     "new_name": snap2_sv_names[i],
@@ -213,7 +213,7 @@ async def test_nvmeof(ctx: TestContext):
 
             try:
                 attached = await ctx.client.call("subvolume.attach", {
-                    "pool": ctx.pool, "name": snap2_sv_names[i],
+                    "filesystem": ctx.pool, "name": snap2_sv_names[i],
                 })
                 block_dev = attached.get("block_device")
                 if not block_dev:
@@ -276,7 +276,7 @@ async def test_nvmeof(ctx: TestContext):
             info(f"Cloning '{snap_names[i][0]}' → '{clone_sv_names[i]}'...")
             try:
                 clone_sv = await ctx.client.call("snapshot.clone", {
-                    "pool": ctx.pool,
+                    "filesystem": ctx.pool,
                     "subvolume": sv_names[i],
                     "snapshot": snap_names[i][0],
                     "new_name": clone_sv_names[i],
@@ -288,7 +288,7 @@ async def test_nvmeof(ctx: TestContext):
 
             try:
                 attached = await ctx.client.call("subvolume.attach", {
-                    "pool": ctx.pool, "name": clone_sv_names[i],
+                    "filesystem": ctx.pool, "name": clone_sv_names[i],
                 })
                 block_dev = attached.get("block_device")
                 if not block_dev:
@@ -350,7 +350,7 @@ async def test_nvmeof(ctx: TestContext):
                 for j in range(S):
                     try:
                         await ctx.client.call("snapshot.delete", {
-                            "pool": ctx.pool, "subvolume": sv_names[i], "name": snap_names[i][j],
+                            "filesystem": ctx.pool, "subvolume": sv_names[i], "name": snap_names[i][j],
                         })
                         ctx.record(f"NVMe-oF[{i+1}]: snapshot {j+1} deleted", True)
                     except Exception as e:
@@ -385,11 +385,11 @@ async def test_nvmeof(ctx: TestContext):
                     except Exception:
                         pass
                 try:
-                    await ctx.client.call("subvolume.detach", {"pool": ctx.pool, "name": snap2_sv_names[i]})
+                    await ctx.client.call("subvolume.detach", {"filesystem": ctx.pool, "name": snap2_sv_names[i]})
                 except Exception:
                     pass
                 try:
-                    await ctx.client.call("subvolume.delete", {"pool": ctx.pool, "name": snap2_sv_names[i]})
+                    await ctx.client.call("subvolume.delete", {"filesystem": ctx.pool, "name": snap2_sv_names[i]})
                 except Exception:
                     pass
                 if clone_subsys_ids[i]:
@@ -398,11 +398,11 @@ async def test_nvmeof(ctx: TestContext):
                     except Exception:
                         pass
                 try:
-                    await ctx.client.call("subvolume.detach", {"pool": ctx.pool, "name": clone_sv_names[i]})
+                    await ctx.client.call("subvolume.detach", {"filesystem": ctx.pool, "name": clone_sv_names[i]})
                 except Exception:
                     pass
                 try:
-                    await ctx.client.call("subvolume.delete", {"pool": ctx.pool, "name": clone_sv_names[i]})
+                    await ctx.client.call("subvolume.delete", {"filesystem": ctx.pool, "name": clone_sv_names[i]})
                 except Exception:
                     pass
                 if subsys_ids[i]:
@@ -411,10 +411,10 @@ async def test_nvmeof(ctx: TestContext):
                     except Exception:
                         pass
                 try:
-                    await ctx.client.call("subvolume.detach", {"pool": ctx.pool, "name": sv_names[i]})
+                    await ctx.client.call("subvolume.detach", {"filesystem": ctx.pool, "name": sv_names[i]})
                 except Exception:
                     pass
                 try:
-                    await ctx.client.call("subvolume.delete", {"pool": ctx.pool, "name": sv_names[i]})
+                    await ctx.client.call("subvolume.delete", {"filesystem": ctx.pool, "name": sv_names[i]})
                 except Exception:
                     pass

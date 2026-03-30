@@ -34,14 +34,14 @@ async def test_setup(ctx: TestContext):
     header("Setup")
 
     info(f"Verifying pool '{ctx.pool}' exists...")
-    pools = await ctx.client.call("pool.list")
+    pools = await ctx.client.call("fs.list")
     pool = next((p for p in pools if p["name"] == ctx.pool), None)
     if not pool:
         fail(f"Pool '{ctx.pool}' not found. Available: {[p['name'] for p in pools]}")
         sys.exit(1)
     if not pool["mounted"]:
         info(f"Mounting pool '{ctx.pool}'...")
-        await ctx.client.call("pool.mount", {"name": ctx.pool})
+        await ctx.client.call("fs.mount", {"name": ctx.pool})
     ok(f"Pool '{ctx.pool}' is mounted")
 
     info("Enabling protocols...")
@@ -108,7 +108,7 @@ async def main():
 
     pool_name = args.pool
     if not pool_name:
-        pools = await client.call("pool.list")
+        pools = await client.call("fs.list")
         mounted = [p for p in pools if p["mounted"]]
         if not mounted:
             fail("No mounted pools found. Specify --pool or mount a pool first.")
@@ -118,7 +118,7 @@ async def main():
         info(f"Auto-detected pool: {pool_name}")
     elif args.create_pool:
         # Create the pool if it doesn't already exist
-        pools = await client.call("pool.list")
+        pools = await client.call("fs.list")
         existing = next((p for p in pools if p["name"] == pool_name), None)
         if not existing:
             info(f"Pool '{pool_name}' not found — discovering available devices...")
@@ -131,7 +131,7 @@ async def main():
             device_specs = [{"path": d["path"]} for d in available]
             info(f"Creating pool '{pool_name}' on {[d['path'] for d in device_specs]}...")
             try:
-                await client.call("pool.create", {"name": pool_name, "devices": device_specs})
+                await client.call("fs.create", {"name": pool_name, "devices": device_specs})
                 ok(f"Pool '{pool_name}' created")
             except Exception as e:
                 fail(f"Failed to create pool '{pool_name}': {e}")

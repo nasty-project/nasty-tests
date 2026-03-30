@@ -12,7 +12,7 @@ async def test_snapshots(ctx: TestContext):
     info(f"Creating parent subvolume '{sv_name}'...")
     try:
         await ctx.client.call("subvolume.create", {
-            "pool": ctx.pool,
+            "filesystem": ctx.pool,
             "name": sv_name,
             "subvolume_type": "filesystem",
         })
@@ -27,7 +27,7 @@ async def test_snapshots(ctx: TestContext):
     info(f"Creating read-only snapshot '{ro_snap}'...")
     try:
         snap = await ctx.client.call("snapshot.create", {
-            "pool": ctx.pool,
+            "filesystem": ctx.pool,
             "subvolume": sv_name,
             "name": ro_snap,
         })
@@ -38,7 +38,7 @@ async def test_snapshots(ctx: TestContext):
 
     if snap is not None:
         info("Verifying read_only=True in snapshot.list...")
-        all_snaps = await ctx.client.call("snapshot.list", {"pool": ctx.pool})
+        all_snaps = await ctx.client.call("snapshot.list", {"filesystem": ctx.pool})
         match = next(
             (s for s in all_snaps if s["name"] == ro_snap and s["subvolume"] == sv_name),
             None,
@@ -57,7 +57,7 @@ async def test_snapshots(ctx: TestContext):
         info(f"Cloning '{ro_snap}' → new subvolume '{clone_name}'...")
         try:
             cloned = await ctx.client.call("snapshot.clone", {
-                "pool": ctx.pool,
+                "filesystem": ctx.pool,
                 "subvolume": sv_name,
                 "snapshot": ro_snap,
                 "new_name": clone_name,
@@ -69,14 +69,14 @@ async def test_snapshots(ctx: TestContext):
 
         if cloned is not None:
             info("Verifying clone appears in subvolume.list...")
-            svs = await ctx.client.call("subvolume.list", {"pool": ctx.pool})
+            svs = await ctx.client.call("subvolume.list", {"filesystem": ctx.pool})
             found = any(s["name"] == clone_name for s in svs)
             ctx.record("snapshots: clone in subvolume list", found,
                        "" if found else f"'{clone_name}' not in list")
 
             if not ctx.skip_delete:
                 try:
-                    await ctx.client.call("subvolume.delete", {"pool": ctx.pool, "name": clone_name})
+                    await ctx.client.call("subvolume.delete", {"filesystem": ctx.pool, "name": clone_name})
                 except Exception:
                     pass
 
@@ -85,13 +85,13 @@ async def test_snapshots(ctx: TestContext):
     if not ctx.skip_delete:
         try:
             await ctx.client.call("snapshot.delete", {
-                "pool": ctx.pool,
+                "filesystem": ctx.pool,
                 "subvolume": sv_name,
                 "name": ro_snap,
             })
         except Exception:
             pass
         try:
-            await ctx.client.call("subvolume.delete", {"pool": ctx.pool, "name": sv_name})
+            await ctx.client.call("subvolume.delete", {"filesystem": ctx.pool, "name": sv_name})
         except Exception:
             pass
