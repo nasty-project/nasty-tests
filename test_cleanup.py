@@ -7,7 +7,7 @@ async def delete_leftovers(client, pool_name: str):
     """Delete all test-* subvolumes and their shares left by --skip-delete runs."""
     header("Cleanup: Deleting test leftovers")
 
-    subvolumes = await client.call("subvolume.list", {"pool": pool_name})
+    subvolumes = await client.call("subvolume.list", {"filesystem": pool_name})
     test_svs = [sv for sv in subvolumes if sv["name"].startswith(TEST_PREFIX)]
     test_paths = {sv["path"] for sv in test_svs}
 
@@ -44,11 +44,11 @@ async def delete_leftovers(client, pool_name: str):
         info(f"Deleting subvolume '{sv['name']}'...")
         if sv.get("subvolume_type") == "block":
             try:
-                await client.call("subvolume.detach", {"pool": pool_name, "name": sv["name"]})
+                await client.call("subvolume.detach", {"filesystem": pool_name, "name": sv["name"]})
             except Exception:
                 pass
         try:
-            await client.call("subvolume.delete", {"pool": pool_name, "name": sv["name"]})
+            await client.call("subvolume.delete", {"filesystem": pool_name, "name": sv["name"]})
             ok(f"Deleted '{sv['name']}'")
         except Exception as e:
             warn(f"Delete '{sv['name']}': {e}")
