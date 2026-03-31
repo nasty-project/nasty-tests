@@ -27,6 +27,7 @@ async def test_multiprotocol(ctx: TestContext):
             "filesystem": ctx.pool,
             "name": sv_name,
             "subvolume_type": "filesystem",
+            "volsize_bytes": 524288000,
         })
         ctx.record("Multi: subvolume created", True)
 

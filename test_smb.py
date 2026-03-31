@@ -36,6 +36,7 @@ async def test_smb(ctx: TestContext):
                     "filesystem": ctx.pool,
                     "name": sv_names[i],
                     "subvolume_type": "filesystem",
+                    "volsize_bytes": 524288000,
                 })
                 ctx.record(f"{label}: subvolume created", True)
 

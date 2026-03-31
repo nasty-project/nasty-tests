@@ -15,6 +15,7 @@ async def test_snapshots(ctx: TestContext):
             "filesystem": ctx.pool,
             "name": sv_name,
             "subvolume_type": "filesystem",
+            "volsize_bytes": 524288000,
         })
         ctx.record("snapshots: parent create", True)
     except Exception as e:

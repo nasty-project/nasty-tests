@@ -17,6 +17,7 @@ async def test_subvolume(ctx: TestContext):
             "filesystem": ctx.pool,
             "name": sv_name,
             "subvolume_type": "filesystem",
+            "volsize_bytes": 524288000,
             "comments": "lifecycle test",
         })
         ctx.record("subvolume lifecycle: create", True)
@@ -62,6 +63,7 @@ async def test_subvolume(ctx: TestContext):
             "filesystem": ctx.pool,
             "name": prop_sv,
             "subvolume_type": "filesystem",
+            "volsize_bytes": 524288000,
         })
     except Exception as e:
         ctx.record("subvolume properties: create", False, str(e))

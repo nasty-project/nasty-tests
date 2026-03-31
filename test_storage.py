@@ -23,6 +23,7 @@ async def _test_compression(ctx: TestContext):
             "filesystem": ctx.pool,
             "name": sv_name,
             "subvolume_type": "filesystem",
+            "volsize_bytes": 524288000,
             "compression": "zstd",
         })
         ctx.record("compression: create with zstd", True)
@@ -71,6 +72,7 @@ async def _test_snapshot_integrity(ctx: TestContext):
                 "filesystem": ctx.pool,
                 "name": sv_name,
                 "subvolume_type": "filesystem",
+                "volsize_bytes": 524288000,
             })
             ctx.record("snapshot integrity: subvolume created", True)
         except Exception as e:
