@@ -28,6 +28,16 @@ The runner automatically provisions the VM with required packages (`nfs-common`,
 | `--skip-nvmeof` | Skip NVMe-oF tests |
 | `--skip-delete` | Leave test resources behind for inspection |
 | `--delete-only` | Clean up leftovers from a prior `--skip-delete` run |
+| `--block-persistence` | Restart the engine and verify stable iSCSI/NVMe-oF identity |
+| `--only-block-persistence` | Run only the block-export restart suite |
+
+The persistence suite is opt-in because it restarts `nasty-engine` on the
+appliance. Run it only against a dedicated test VM:
+
+```bash
+NASTY_PASSWORD=admin ./run-tests.sh --host 10.10.10.50 \
+  --only-block-persistence
+```
 
 ## Test Suites
 

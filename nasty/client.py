@@ -106,8 +106,54 @@ class NastyClient:
                 return resp.get("result")
 
     async def reconnect(self):
-        await self.close()
+        try:
+            await self.close()
+        except Exception:
+            self.ws = None
+        if self.password is not None:
+            self.token = None
         await self.connect()
+
+    async def run_terminal(self, command: list[str]) -> str:
+        """Run one root-equivalent command through the authenticated terminal."""
+        import ssl
+
+        ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        ssl_ctx.check_hostname = False
+        ssl_ctx.verify_mode = ssl.CERT_NONE
+        terminal = await asyncio.wait_for(
+            websockets.connect(
+                f"wss://{self.host}:{self.port}/ws/terminal",
+                ssl=ssl_ctx,
+            ),
+            timeout=self.timeout,
+        )
+        try:
+            await asyncio.wait_for(terminal.send(json.dumps({
+                "token": self.token,
+                "cols": 80,
+                "rows": 24,
+                "cmd": command,
+            })), timeout=self.timeout)
+            auth = json.loads(await asyncio.wait_for(
+                terminal.recv(), timeout=self.timeout))
+            if not auth.get("authenticated"):
+                raise AuthenticationError(f"Terminal auth failed: {auth}")
+
+            output = []
+            deadline = asyncio.get_running_loop().time() + self.timeout
+            while True:
+                remaining = deadline - asyncio.get_running_loop().time()
+                if remaining <= 0:
+                    raise TimeoutError("Terminal command timed out")
+                try:
+                    message = await asyncio.wait_for(terminal.recv(), timeout=remaining)
+                except websockets.exceptions.ConnectionClosed:
+                    break
+                output.append(message.decode() if isinstance(message, bytes) else message)
+            return "".join(output)
+        finally:
+            await terminal.close()
 
     async def close(self):
         if self.ws:

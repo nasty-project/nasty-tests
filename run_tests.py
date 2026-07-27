@@ -20,6 +20,7 @@ from nasty.context import TestContext
 from nasty.output import GREEN, RED, BOLD, RESET, info, ok, fail, warn, header
 from nasty.shell import cmd_exists, run
 
+from test_block_persistence import test_block_persistence
 from test_nfs import test_nfs
 from test_smb import test_smb
 from test_iscsi import test_iscsi
@@ -40,6 +41,7 @@ EXPECTED_CHECKS = {
     "Multi-protocol": 9,
     "iSCSI": 95,
     "NVMe-oF": 110,
+    "Block persistence": 26,
 }
 
 SKIP_DELETE_EXPECTED_CHECKS = {
@@ -75,7 +77,9 @@ async def run_suite(ctx: TestContext, name: str, test_fn, expected: int):
         await test_fn(ctx)
     except Exception as e:
         ctx.record(f"{name}: unhandled exception", False, str(e))
-    actual = len(ctx.results) - before
+    suite_results = ctx.results[before:]
+    actual = sum(1 for result_name, _, _ in suite_results
+                 if not result_name.endswith("client cleanup"))
     if actual != expected:
         ctx.record(
             f"{name}: result contract",
@@ -191,6 +195,11 @@ async def main():
                         help="Reuse a specific tag from a prior run (e.g. from --skip-delete)")
     parser.add_argument("--remount", action="store_true",
                         help="Skip creation/writes, mount existing shares and verify data only (use with --tag)")
+    parser.add_argument("--block-persistence", action="store_true",
+                        help="Restart the engine and verify stable iSCSI/NVMe-oF exports")
+    parser.add_argument("--only-block-persistence", action="store_true",
+                        help="Run only the block-export persistence suite")
+    parser.add_argument("--restart-timeout", type=int, default=180)
     args = parser.parse_args()
 
     if args.password_stdin and args.password is not None:
@@ -199,6 +208,23 @@ async def main():
         args.password = sys.stdin.readline().rstrip("\r\n")
     elif args.password is None:
         args.password = os.environ.get("NASTY_PASSWORD", "admin")
+
+    if args.only_block_persistence:
+        args.block_persistence = True
+        args.skip_subvolume = True
+        args.skip_snapshots = True
+        args.skip_storage = True
+        args.skip_nfs = True
+        args.skip_smb = True
+        args.skip_iscsi = True
+        args.skip_nvmeof = True
+    if args.block_persistence and args.remount:
+        parser.error("--block-persistence cannot be combined with --remount")
+    if args.block_persistence:
+        missing = [cmd for cmd in ("iscsiadm", "nvme", "mkfs.ext4", "blkid")
+                   if not cmd_exists(cmd)]
+        if missing:
+            parser.error(f"--block-persistence requires: {', '.join(missing)}")
 
     if os.geteuid() != 0:
         print(f"{RED}ERROR:{RESET} This test must be run as root (needs mount/iscsi/nvme)")
@@ -297,6 +323,13 @@ async def main():
             expected = SKIP_DELETE_EXPECTED_CHECKS
         else:
             expected = EXPECTED_CHECKS
+
+        if args.block_persistence:
+            async def persistence_suite(test_ctx):
+                await test_block_persistence(test_ctx, args.restart_timeout)
+
+            await run_suite(ctx, "Block persistence", persistence_suite,
+                            EXPECTED_CHECKS["Block persistence"])
 
         if not args.skip_subvolume and not args.remount:
             await run_suite(ctx, "Subvolume", test_subvolume, expected["Subvolume"])
