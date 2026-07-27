@@ -29,6 +29,13 @@ from test_snapshots import test_snapshots
 from test_storage import test_storage
 from test_multiprotocol import test_multiprotocol
 from test_cleanup import delete_leftovers
+from test_rbac import test_rbac
+from test_protocol_auth import (
+    test_iscsi_auth,
+    test_nfs_auth,
+    test_nvmeof_auth,
+    test_smb_auth,
+)
 
 
 EXPECTED_CHECKS = {
@@ -40,6 +47,11 @@ EXPECTED_CHECKS = {
     "Multi-protocol": 9,
     "iSCSI": 95,
     "NVMe-oF": 110,
+    "RBAC": 26,
+    "NFS auth": 4,
+    "SMB auth": 6,
+    "iSCSI auth": 4,
+    "NVMe-oF auth": 4,
 }
 
 SKIP_DELETE_EXPECTED_CHECKS = {
@@ -75,7 +87,8 @@ async def run_suite(ctx: TestContext, name: str, test_fn, expected: int):
         await test_fn(ctx)
     except Exception as e:
         ctx.record(f"{name}: unhandled exception", False, str(e))
-    actual = len(ctx.results) - before
+    actual = sum(1 for result_name, _, _ in ctx.results[before:]
+                 if not result_name.endswith("cleanup"))
     if actual != expected:
         ctx.record(
             f"{name}: result contract",
@@ -183,6 +196,10 @@ async def main():
     parser.add_argument("--skip-subvolume", action="store_true")
     parser.add_argument("--skip-snapshots", action="store_true")
     parser.add_argument("--skip-storage",   action="store_true")
+    parser.add_argument("--skip-rbac", action="store_true")
+    parser.add_argument("--skip-protocol-auth", action="store_true")
+    parser.add_argument("--only-security", action="store_true",
+                        help="Run only RBAC and protocol authorization tests")
     parser.add_argument("--skip-delete", action="store_true",
                         help="Skip server-side deletions (leave subvolumes/shares behind)")
     parser.add_argument("--delete-only", action="store_true",
@@ -193,6 +210,8 @@ async def main():
                         help="Skip creation/writes, mount existing shares and verify data only (use with --tag)")
     args = parser.parse_args()
 
+    if args.only_security and args.skip_delete:
+        parser.error("--only-security cannot be combined with --skip-delete")
     if args.password_stdin and args.password is not None:
         parser.error("--password and --password-stdin are mutually exclusive")
     if args.password_stdin:
@@ -298,36 +317,59 @@ async def main():
         else:
             expected = EXPECTED_CHECKS
 
-        if not args.skip_subvolume and not args.remount:
+        if not args.skip_rbac and not args.remount and not args.skip_delete:
+            await run_suite(ctx, "RBAC", test_rbac, EXPECTED_CHECKS["RBAC"])
+        else:
+            warn("RBAC: skipped")
+
+        if (not args.skip_protocol_auth and not args.remount and
+                not args.skip_delete):
+            if not args.skip_nfs:
+                await run_suite(ctx, "NFS auth", test_nfs_auth,
+                                EXPECTED_CHECKS["NFS auth"])
+            if not args.skip_smb:
+                await run_suite(ctx, "SMB auth", test_smb_auth,
+                                EXPECTED_CHECKS["SMB auth"])
+            if not args.skip_iscsi:
+                await run_suite(ctx, "iSCSI auth", test_iscsi_auth,
+                                EXPECTED_CHECKS["iSCSI auth"])
+            if not args.skip_nvmeof:
+                await run_suite(ctx, "NVMe-oF auth", test_nvmeof_auth,
+                                EXPECTED_CHECKS["NVMe-oF auth"])
+        else:
+            warn("Protocol authorization: skipped")
+
+        if not args.skip_subvolume and not args.remount and not args.only_security:
             await run_suite(ctx, "Subvolume", test_subvolume, expected["Subvolume"])
         else:                       warn("Subvolume: skipped")
 
-        if not args.skip_snapshots and not args.remount:
+        if not args.skip_snapshots and not args.remount and not args.only_security:
             await run_suite(ctx, "Snapshots", test_snapshots, expected["Snapshots"])
         else:                       warn("Snapshots: skipped")
 
-        if not args.skip_storage and not args.remount:
+        if not args.skip_storage and not args.remount and not args.only_security:
             await run_suite(ctx, "Storage", test_storage, expected["Storage"])
         else:                       warn("Storage: skipped")
 
-        if not args.skip_nfs:
+        if not args.skip_nfs and not args.only_security:
             await run_suite(ctx, "NFS", test_nfs, expected["NFS"])
         else:                    warn("NFS: skipped")
 
-        if not args.skip_smb:
+        if not args.skip_smb and not args.only_security:
             await run_suite(ctx, "SMB", test_smb, expected["SMB"])
         else:                    warn("SMB: skipped")
 
-        if not args.skip_nfs and not args.skip_smb and not args.remount:
+        if (not args.skip_nfs and not args.skip_smb and not args.remount and
+                not args.only_security):
             await run_suite(ctx, "Multi-protocol", test_multiprotocol,
                             expected["Multi-protocol"])
         else:                    warn("Multi-protocol: skipped")
 
-        if not args.skip_iscsi:
+        if not args.skip_iscsi and not args.only_security:
             await run_suite(ctx, "iSCSI", test_iscsi, expected["iSCSI"])
         else:                    warn("iSCSI: skipped")
 
-        if not args.skip_nvmeof:
+        if not args.skip_nvmeof and not args.only_security:
             await run_suite(ctx, "NVMe-oF", test_nvmeof, expected["NVMe-oF"])
         else:                    warn("NVMe-oF: skipped")
 
