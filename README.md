@@ -30,6 +30,9 @@ The runner automatically provisions the VM with required packages (`nfs-common`,
 | `--delete-only` | Clean up leftovers from a prior `--skip-delete` run |
 | `--block-persistence` | Restart the engine and verify stable iSCSI/NVMe-oF identity |
 | `--only-block-persistence` | Run only the block-export restart suite |
+| `--skip-rbac` | Skip management-role and scoped-token tests |
+| `--skip-protocol-auth` | Skip authenticated/denied protocol probes |
+| `--only-security` | Run only RBAC and protocol authorization tests |
 
 The persistence suite is opt-in because it restarts `nasty-engine` on the
 appliance. Run it only against a dedicated test VM:
@@ -38,6 +41,9 @@ appliance. Run it only against a dedicated test VM:
 NASTY_PASSWORD=admin ./run-tests.sh --host 10.10.10.50 \
   --only-block-persistence
 ```
+
+Security suites are skipped with `--skip-delete` because their temporary users,
+tokens, and authorization fixtures must always be removed.
 
 ## Test Suites
 
@@ -65,6 +71,18 @@ Per-subvolume NVMe-oF subsystem lifecycle: create block subvolume + subsystem, n
 ### test_multiprotocol (~14 checks)
 Cross-protocol test: creates a filesystem subvolume and shares it via both NFS and SMB simultaneously. Verifies data written via one protocol is readable via the other.
 
+### test_rbac (26 checks)
+Admin, Operator, and ReadOnly sessions; filesystem-scoped API tokens; owner
+isolation between independent operator tokens; denied cross-owner access.
+
+### test_protocol_auth (18 checks)
+NFS client restrictions, authenticated SMB shares, iSCSI CHAP and initiator
+ACLs, and NVMe-oF host-NQN allow/revoke behavior.
+
+### test_block_persistence (26 checks, opt-in)
+Stable iSCSI and NVMe-oF export identities, backing devices, filesystem UUIDs,
+and marker data across a detached `nasty-engine` restart.
+
 ### test_cleanup
 Utility: deletes all `test-*` resources from a prior `--skip-delete` run.
 
@@ -73,7 +91,7 @@ Utility: deletes all `test-*` resources from a prior `--skip-delete` run.
 Results are printed in real-time and saved to `last-run.log`:
 
 ```
-370/370 passed, 0 failed
+414/414 passed, 0 failed
 ```
 
 ## Related
