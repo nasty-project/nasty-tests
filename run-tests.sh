@@ -14,7 +14,9 @@
 #   ./tests/run-tests.sh --host 10.10.10.50
 #   ./tests/run-tests.sh --host 10.10.10.50 --pool tank --skip-nvmeof
 #
-# All arguments after the script name are forwarded to run_tests.py.
+# All arguments after the script name are forwarded to run_tests.py. Passwords
+# are removed before entering Colima and sent over stdin. Use NASTY_PASSWORD to
+# keep the password out of the invoking macOS process arguments too.
 
 set -euo pipefail
 
@@ -49,8 +51,40 @@ if [[ ! -f "$SCRIPT_DIR/run_tests.py" ]]; then
     exit 1
 fi
 
+# Parse secrets locally and preserve every other argument boundary. The old
+# `$*` interpolation passed user input through a root shell in Colima.
+PASSWORD="${NASTY_PASSWORD:-}"
+FORWARDED_ARGS=()
+HAS_HOST=false
+while (( $# )); do
+    case "$1" in
+        --password)
+            if (( $# < 2 )); then
+                fail "--password requires a value"
+                exit 2
+            fi
+            PASSWORD="$2"
+            shift 2
+            ;;
+        --password=*)
+            PASSWORD="${1#--password=}"
+            shift
+            ;;
+        --host|--host=*)
+            HAS_HOST=true
+            FORWARDED_ARGS+=("$1")
+            shift
+            ;;
+        *)
+            FORWARDED_ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
+PASSWORD="${PASSWORD:-admin}"
+
 # Require --host
-if [[ "$*" != *"--host"* ]]; then
+if [[ "$HAS_HOST" != true ]]; then
     echo -e "${RED}Usage:${RESET} $0 --host <nasty-ip> [options]"
     echo ""
     echo "Options (forwarded to run_tests.py):"
@@ -139,7 +173,7 @@ fi
 # ── Copy test suite & run ────────────────────────────────────────
 
 info "Copying test suite to VM..."
-tar -C "$SCRIPT_DIR" -czf - \
+tar --no-xattrs -C "$SCRIPT_DIR" -czf - \
     --exclude='__pycache__' \
     --exclude='*.pyc' \
     --exclude='run-tests.sh' \
@@ -155,11 +189,15 @@ LOG="$SCRIPT_DIR/last-run.log"
 info "Running tests inside Colima VM..."
 echo ""
 
-# The VM needs root for mount/iscsi/nvme operations
-colima ssh -- sudo bash -c \
-    "cd /tmp/nasty-tests && /tmp/nasty-test-venv/bin/python3 run_tests.py $*" \
-    | tee "$LOG"
+# The VM needs root for mount/iscsi/nvme operations. Avoid a remote shell so
+# every forwarded option remains one argv element. Feed the password on stdin.
+set +e
+colima ssh -- sudo /tmp/nasty-test-venv/bin/python3 \
+    /tmp/nasty-tests/run_tests.py "${FORWARDED_ARGS[@]}" --password-stdin \
+    <<<"$PASSWORD" 2>&1 | tee "$LOG"
 EXIT_CODE=${PIPESTATUS[0]}
+set -e
+unset PASSWORD
 
 # Strip ANSI escape codes and show failures summary
 FAILURES=$(sed 's/\x1b\[[0-9;]*m//g' "$LOG" | grep '^\s*\[FAIL\]' || true)

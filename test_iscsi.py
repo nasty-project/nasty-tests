@@ -3,7 +3,7 @@ import os
 
 from nasty.context import TestContext
 from nasty.output import info
-from nasty.shell import run
+from nasty.shell import cleanup_mount, run, validate_format_device
 
 N = 5  # subvolumes per run
 S = 2  # snapshots per subvolume
@@ -16,11 +16,11 @@ def find_iscsi_device(iqn: str) -> str | None:
         return None
     in_target = False
     for line in r.stdout.splitlines():
-        if iqn in line:
-            in_target = True
-        elif in_target and "Target:" in line:
-            break
-        elif in_target and "Attached scsi disk" in line:
+        stripped = line.strip()
+        if stripped.startswith("Target:"):
+            target_fields = stripped.removeprefix("Target:").strip().split()
+            in_target = bool(target_fields) and target_fields[0] == iqn
+        elif in_target and "Attached scsi disk" in stripped:
             parts = line.strip().split()
             idx = parts.index("disk") + 1 if "disk" in parts else -1
             if 0 < idx < len(parts):
@@ -74,6 +74,18 @@ async def test_iscsi(ctx: TestContext):
                 target_ids[i] = target["id"]
                 iqns[i] = target["iqn"]
                 ctx.record(f"{label}: target created", True)
+        else:
+            targets = await ctx.client.call("share.iscsi.list")
+            for i in range(N):
+                target = next((t for t in targets if
+                               t.get("name") == target_names[i] or
+                               t.get("iqn", "").endswith(f":{target_names[i]}")), None)
+                if target:
+                    target_ids[i] = target["id"]
+                    iqns[i] = target["iqn"]
+                else:
+                    ctx.record(f"iSCSI[{i+1}]: target found", False,
+                               f"'{target_names[i]}' not found")
 
         # ── Discovery + login ─────────────────────────────────────
         for i in range(N):
@@ -115,6 +127,10 @@ async def test_iscsi(ctx: TestContext):
             ctx.record(f"{label}: device attached", True)
 
             if not ctx.remount:
+                unsafe = validate_format_device(dev, r"/dev/sd[a-z]+", 64 * 1024 * 1024)
+                if unsafe:
+                    ctx.record(f"{label}: mkfs.ext4", False, unsafe)
+                    continue
                 info(f"Formatting {dev} with ext4...")
                 r = run(["mkfs.ext4", "-F", "-q", dev], check=False, timeout=60)
                 if r.returncode != 0:
@@ -275,20 +291,18 @@ async def test_iscsi(ctx: TestContext):
         ctx.record("iSCSI: test", False, str(e))
     finally:
         for i in range(N):
-            if clone_mounted[i]:
-                run(["umount", clone_mounts[i]], check=False)
-            if os.path.isdir(clone_mounts[i]):
-                os.rmdir(clone_mounts[i])
+            error = cleanup_mount(clone_mounts[i], clone_mounted[i])
+            if error:
+                ctx.record(f"iSCSI[{i+1}] clone: client cleanup", False, error)
             if clone_connected[i] and clone_iqns[i]:
                 run(["iscsiadm", "-m", "node", "-T", clone_iqns[i], "-p", f"{ctx.host}:3260", "--logout"],
                     check=False)
             if clone_iqns[i]:
                 run(["iscsiadm", "-m", "node", "-T", clone_iqns[i], "-p", f"{ctx.host}:3260", "-o", "delete"],
                     check=False)
-            if mounted[i]:
-                run(["umount", mount_points[i]], check=False)
-            if os.path.isdir(mount_points[i]):
-                os.rmdir(mount_points[i])
+            error = cleanup_mount(mount_points[i], mounted[i])
+            if error:
+                ctx.record(f"iSCSI[{i+1}]: client cleanup", False, error)
             if logged_in[i] and iqns[i]:
                 run(["iscsiadm", "-m", "node", "-T", iqns[i], "-p", f"{ctx.host}:3260", "--logout"],
                     check=False)

@@ -3,7 +3,7 @@ import os
 
 from nasty.context import TestContext
 from nasty.output import info
-from nasty.shell import run
+from nasty.shell import cleanup_mount, run
 
 N = 5  # subvolumes per run
 S = 2  # snapshots per subvolume
@@ -174,14 +174,12 @@ async def test_nfs(ctx: TestContext):
         ctx.record("NFS: test", False, str(e))
     finally:
         for i in range(N):
-            if clone_mounted[i]:
-                run(["umount", clone_mounts[i]], check=False)
-            if os.path.isdir(clone_mounts[i]):
-                os.rmdir(clone_mounts[i])
-            if mounted[i]:
-                run(["umount", mount_points[i]], check=False)
-            if os.path.isdir(mount_points[i]):
-                os.rmdir(mount_points[i])
+            error = cleanup_mount(clone_mounts[i], clone_mounted[i])
+            if error:
+                ctx.record(f"NFS[{i+1}] clone: client cleanup", False, error)
+            error = cleanup_mount(mount_points[i], mounted[i])
+            if error:
+                ctx.record(f"NFS[{i+1}]: client cleanup", False, error)
             if not ctx.skip_delete:
                 if clone_share_ids[i]:
                     try:
