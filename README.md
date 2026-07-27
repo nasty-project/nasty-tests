@@ -7,7 +7,7 @@ End-to-end integration tests for the [NASty](https://github.com/nasty-project/na
 Tests run inside a [Colima](https://github.com/abiosoft/colima) Linux VM (required for NFS/SMB/iSCSI/NVMe-oF client operations from macOS):
 
 ```bash
-./run-tests.sh --host 10.10.10.50 --password admin
+NASTY_PASSWORD=admin ./run-tests.sh --host 10.10.10.50
 ```
 
 The runner automatically provisions the VM with required packages (`nfs-common`, `cifs-utils`, `open-iscsi`, `nvme-cli`, `python3`, `websockets`) on first run.
@@ -17,7 +17,7 @@ The runner automatically provisions the VM with required packages (`nfs-common`,
 | Flag | Description |
 |------|-------------|
 | `--host HOST` | NASty appliance IP (required) |
-| `--password PW` | Admin password (default: `admin`) |
+| `--password PW` | Admin password (default: `admin`; `NASTY_PASSWORD` avoids process arguments) |
 | `--pool POOL` | Filesystem name (auto-detected if omitted) |
 | `--skip-subvolume` | Skip subvolume lifecycle tests |
 | `--skip-snapshots` | Skip snapshot tests |

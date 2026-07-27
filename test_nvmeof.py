@@ -5,7 +5,7 @@ import os
 
 from nasty.context import TestContext
 from nasty.output import info
-from nasty.shell import run
+from nasty.shell import cleanup_mount, run, validate_format_device
 
 N = 5  # subvolumes per run
 S = 2  # snapshots per subvolume
@@ -96,6 +96,18 @@ async def test_nvmeof(ctx: TestContext):
                 subsys_ids[i] = subsys["id"]
                 nqns[i] = subsys["nqn"]
                 ctx.record(f"{label}: share created", True)
+        else:
+            subsystems = await ctx.client.call("share.nvmeof.list")
+            for i in range(N):
+                subsys = next((s for s in subsystems if
+                               s.get("name") == subsys_names[i] or
+                               s.get("nqn", "").endswith(f":{subsys_names[i]}")), None)
+                if subsys:
+                    subsys_ids[i] = subsys["id"]
+                    nqns[i] = subsys["nqn"]
+                else:
+                    ctx.record(f"NVMe-oF[{i+1}]: subsystem found", False,
+                               f"'{subsys_names[i]}' not found")
 
         # ── Connect ───────────────────────────────────────────────
         for i in range(N):
@@ -126,6 +138,11 @@ async def test_nvmeof(ctx: TestContext):
             ctx.record(f"{label}: device visible", True)
 
             if not ctx.remount:
+                unsafe = validate_format_device(dev, r"/dev/nvme[0-9]+n[0-9]+",
+                                                64 * 1024 * 1024)
+                if unsafe:
+                    ctx.record(f"{label}: mkfs.ext4", False, unsafe)
+                    continue
                 info(f"Formatting {dev} with ext4...")
                 r = run(["mkfs.ext4", "-F", "-q", dev], check=False, timeout=60)
                 if r.returncode != 0:
@@ -360,22 +377,19 @@ async def test_nvmeof(ctx: TestContext):
         ctx.record("NVMe-oF: test", False, str(e))
     finally:
         for i in range(N):
-            if snap2_mounted[i]:
-                run(["umount", snap2_mounts[i]], check=False)
-            if os.path.isdir(snap2_mounts[i]):
-                os.rmdir(snap2_mounts[i])
+            error = cleanup_mount(snap2_mounts[i], snap2_mounted[i])
+            if error:
+                ctx.record(f"NVMe-oF[{i+1}] snap2: client cleanup", False, error)
             if snap2_connected[i] and snap2_nqns[i]:
                 run(["nvme", "disconnect", "-n", snap2_nqns[i]], check=False)
-            if clone_mounted[i]:
-                run(["umount", clone_mounts[i]], check=False)
-            if os.path.isdir(clone_mounts[i]):
-                os.rmdir(clone_mounts[i])
+            error = cleanup_mount(clone_mounts[i], clone_mounted[i])
+            if error:
+                ctx.record(f"NVMe-oF[{i+1}] clone: client cleanup", False, error)
             if clone_connected[i] and clone_nqns[i]:
                 run(["nvme", "disconnect", "-n", clone_nqns[i]], check=False)
-            if mounted[i]:
-                run(["umount", mount_points[i]], check=False)
-            if os.path.isdir(mount_points[i]):
-                os.rmdir(mount_points[i])
+            error = cleanup_mount(mount_points[i], mounted[i])
+            if error:
+                ctx.record(f"NVMe-oF[{i+1}]: client cleanup", False, error)
             if connected[i] and nqns[i]:
                 run(["nvme", "disconnect", "-n", nqns[i]], check=False)
             if not ctx.skip_delete:

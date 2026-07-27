@@ -3,7 +3,7 @@ import os
 
 from nasty.context import TestContext
 from nasty.output import info
-from nasty.shell import run
+from nasty.shell import cleanup_mount, run
 
 
 async def test_multiprotocol(ctx: TestContext):
@@ -108,14 +108,12 @@ async def test_multiprotocol(ctx: TestContext):
     except Exception as e:
         ctx.record("Multi: test", False, str(e))
     finally:
-        if smb_mounted:
-            run(["umount", smb_mount], check=False)
-        if os.path.isdir(smb_mount):
-            os.rmdir(smb_mount)
-        if nfs_mounted:
-            run(["umount", nfs_mount], check=False)
-        if os.path.isdir(nfs_mount):
-            os.rmdir(nfs_mount)
+        error = cleanup_mount(smb_mount, smb_mounted)
+        if error:
+            ctx.record("Multi: SMB client cleanup", False, error)
+        error = cleanup_mount(nfs_mount, nfs_mounted)
+        if error:
+            ctx.record("Multi: NFS client cleanup", False, error)
         if not ctx.skip_delete:
             if smb_share_id:
                 try:
