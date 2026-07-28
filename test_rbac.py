@@ -61,6 +61,9 @@ async def test_rbac(ctx: TestContext):
     sentinel_name = f"test-rbac-admin-{ctx.tag}"
     owned_a_name = f"test-rbac-a-{ctx.tag}"
     owned_b_name = f"test-rbac-b-{ctx.tag}"
+    orphan_snapshot_name = f"test-rbac-orphan-snap-{ctx.tag}"
+    orphan_clone_name = f"test-rbac-orphan-clone-{ctx.tag}"
+    foreign_clone_name = f"test-rbac-foreign-clone-{ctx.tag}"
 
     clients = []
     token_ids = []
@@ -291,10 +294,68 @@ async def test_rbac(ctx: TestContext):
                    {sentinel_name, owned_a_name, owned_b_name} <= readonly_visible,
                    str(sorted(readonly_visible)))
 
+        await token_a.call("snapshot.create", {
+            "filesystem": ctx.pool,
+            "subvolume": owned_a_name,
+            "name": orphan_snapshot_name,
+            "read_only": True,
+        })
+        ctx.record("RBAC: token A creates owned snapshot", True)
+
         await token_a.call("subvolume.delete", {
             "filesystem": ctx.pool, "name": owned_a_name,
         })
         ctx.record("RBAC: token A deletes owned subvolume", True)
+
+        await token_b.call("subvolume.create", {
+            "filesystem": ctx.pool,
+            "name": owned_a_name,
+            "subvolume_type": "filesystem",
+            "volsize_bytes": 16 * 1024 * 1024,
+        })
+        denied, detail = await _denied(token_a, "snapshot.clone", {
+            "filesystem": ctx.pool,
+            "subvolume": owned_a_name,
+            "snapshot": orphan_snapshot_name,
+            "new_name": foreign_clone_name,
+        })
+        ctx.record("RBAC: foreign recreated parent blocks orphan clone", denied, detail)
+        await token_b.call("subvolume.delete", {
+            "filesystem": ctx.pool, "name": owned_a_name,
+        })
+
+        orphan_clone = await token_a.call("snapshot.clone", {
+            "filesystem": ctx.pool,
+            "subvolume": owned_a_name,
+            "snapshot": orphan_snapshot_name,
+            "new_name": orphan_clone_name,
+        })
+        ctx.record("RBAC: token A clones owned orphan snapshot",
+                   orphan_clone.get("owner") == token_a_name,
+                   str(orphan_clone))
+
+        denied, detail = await _denied(token_b, "snapshot.clone", {
+            "filesystem": ctx.pool,
+            "subvolume": owned_a_name,
+            "snapshot": orphan_snapshot_name,
+            "new_name": foreign_clone_name,
+        })
+        ctx.record("RBAC: token B denied foreign orphan clone", denied, detail)
+
+        denied, detail = await _denied(token_b, "snapshot.delete", {
+            "filesystem": ctx.pool,
+            "subvolume": owned_a_name,
+            "name": orphan_snapshot_name,
+        })
+        ctx.record("RBAC: token B denied foreign orphan delete", denied, detail)
+
+        await token_a.call("snapshot.delete", {
+            "filesystem": ctx.pool,
+            "subvolume": owned_a_name,
+            "name": orphan_snapshot_name,
+        })
+        ctx.record("RBAC: token A deletes owned orphan snapshot", True)
+
         await token_b.call("subvolume.delete", {
             "filesystem": ctx.pool, "name": owned_b_name,
         })
@@ -317,9 +378,18 @@ async def test_rbac(ctx: TestContext):
             error = await _reconcile_share(ctx.client, protocol, expected)
             if error:
                 cleanup_errors.append(f"{protocol} share {expected}: {error}")
+        try:
+            await ctx.client.call("snapshot.delete", {
+                "filesystem": ctx.pool,
+                "subvolume": owned_a_name,
+                "name": orphan_snapshot_name,
+            })
+        except Exception:
+            pass
         expected_subvolumes = {
             sentinel_name, owned_a_name, owned_b_name,
             f"test-rbac-block-{ctx.tag}",
+            orphan_clone_name, foreign_clone_name,
         }
         for name in expected_subvolumes:
             try:

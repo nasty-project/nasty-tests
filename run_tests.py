@@ -49,7 +49,7 @@ EXPECTED_CHECKS = {
     "iSCSI": 95,
     "NVMe-oF": 110,
     "Block persistence": 26,
-    "RBAC": 26,
+    "RBAC": 32,
     "NFS auth": 4,
     "SMB auth": 6,
     "iSCSI auth": 4,
