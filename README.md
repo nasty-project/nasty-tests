@@ -28,9 +28,19 @@ The runner automatically provisions the VM with required packages (`nfs-common`,
 | `--skip-nvmeof` | Skip NVMe-oF tests |
 | `--skip-delete` | Leave test resources behind for inspection |
 | `--delete-only` | Clean up leftovers from a prior `--skip-delete` run |
+| `--block-persistence` | Restart the engine and verify stable iSCSI/NVMe-oF identity |
+| `--only-block-persistence` | Run only the block-export restart suite |
 | `--skip-rbac` | Skip management-role and scoped-token tests |
 | `--skip-protocol-auth` | Skip authenticated/denied protocol probes |
 | `--only-security` | Run only RBAC and protocol authorization tests |
+
+The persistence suite is opt-in because it restarts `nasty-engine` on the
+appliance. Run it only against a dedicated test VM:
+
+```bash
+NASTY_PASSWORD=admin ./run-tests.sh --host 10.10.10.50 \
+  --only-block-persistence
+```
 
 Security suites are skipped with `--skip-delete` because their temporary users,
 tokens, and authorization fixtures must always be removed.
@@ -68,6 +78,10 @@ isolation between independent operator tokens; denied cross-owner access.
 ### test_protocol_auth (18 checks)
 NFS client restrictions, authenticated SMB shares, iSCSI CHAP and initiator
 ACLs, and NVMe-oF host-NQN allow/revoke behavior.
+
+### test_block_persistence (26 checks, opt-in)
+Stable iSCSI and NVMe-oF export identities, backing devices, filesystem UUIDs,
+and marker data across a detached `nasty-engine` restart.
 
 ### test_cleanup
 Utility: deletes all `test-*` resources from a prior `--skip-delete` run.
