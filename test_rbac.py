@@ -147,10 +147,11 @@ async def test_rbac(ctx: TestContext):
                        me.get("role") == role and me.get("scoped") is True,
                        str(me))
 
-        token_a_filesystems = await token_a.call("fs.list")
-        ctx.record("RBAC: operator token filesystem scope",
-                   [fs.get("name") for fs in token_a_filesystems] == [ctx.pool],
-                   str(token_a_filesystems))
+        # Operator tokens carry owner scope as well as filesystem scope, so
+        # global filesystem inventory is denied rather than filtered.
+        denied, detail = await _denied(token_a, "fs.list")
+        ctx.record("RBAC: operator token denied global filesystem inventory",
+                   denied, detail)
         readonly_token_filesystems = await readonly_token.call("fs.list")
         ctx.record("RBAC: readonly token filesystem scope",
                    [fs.get("name") for fs in readonly_token_filesystems] == [ctx.pool],
